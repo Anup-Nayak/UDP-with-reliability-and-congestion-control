@@ -123,6 +123,8 @@ def fast_recovery():
     Perform fast recovery by retransmitting the necessary packet.
     """
     # Add logic to retransmit packet after 3 duplicate ACKs
+    print("to de done")
+    pass
 
 # Command-line argument parsing
 parser = argparse.ArgumentParser(description='Reliable file transfer server over UDP.')
