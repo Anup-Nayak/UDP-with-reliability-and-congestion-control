@@ -98,6 +98,8 @@ def handle_out_of_order_packet(seq_num, data):
     """
     Handle packets that arrive out of order.
     """
+    print("to de done")
+    pass
     # Add logic to store and reorder out-of-order packets
 
 # Command-line argument parsing
