@@ -29,7 +29,7 @@ def send_file(server_ip, server_port, enable_fast_recovery):
                 chunk = file.read(MSS)
                 if not chunk:
                     send_end_signal(server_socket, client_address)
-                    break
+                    return
                 
                 packet = create_packet(seq_num, chunk)
                 server_socket.sendto(packet, client_address)
@@ -122,9 +122,9 @@ def fast_recovery():
     """
     Perform fast recovery by retransmitting the necessary packet.
     """
-    # Add logic to retransmit packet after 3 duplicate ACKs
     print("to de done")
     pass
+    # Add logic to retransmit packet after 3 duplicate ACKs
 
 # Command-line argument parsing
 parser = argparse.ArgumentParser(description='Reliable file transfer server over UDP.')
