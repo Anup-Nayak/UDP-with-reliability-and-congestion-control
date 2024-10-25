@@ -20,7 +20,7 @@ def send_file(server_ip, server_port, enable_fast_recovery):
     client_address = await_client_connection(server_socket)
     
     with open(FILE_PATH, 'rb') as file:
-        seq_num, window_base, last_ack_received = 0, 0, -1
+        seq_num, last_ack_received = 0, -1
         unacked_packets = {}
         duplicate_ack_count = 0
 
@@ -32,7 +32,8 @@ def send_file(server_ip, server_port, enable_fast_recovery):
                     return
                 
                 packet = create_packet(seq_num, chunk)
-                server_socket.sendto(packet, client_address)
+                if(seq_num!=MSS):
+                    server_socket.sendto(packet, client_address)
                 unacked_packets[seq_num] = (packet, time.time())
                 print(f"Sent packet {seq_num}")
                 seq_num += len(chunk)
@@ -65,8 +66,11 @@ def await_client_connection(server_socket):
     """
     print("Waiting for client connection...")
     data, client_address = server_socket.recvfrom(1024)
-    print(f"Connection established with {client_address}")
-    return client_address
+    if(data == (b'START')):
+        print(f"Connection established with {client_address}")
+        return client_address
+    
+    
 
 def create_packet(seq_num, data):
     """

@@ -17,6 +17,7 @@ def receive_file(server_ip, server_port):
     output_file_path = "received_file.txt"
 
     # Open the file to write received data
+    buffer = {}
     with open(output_file_path, 'wb') as file:
         establish_connection(client_socket, server_address)
         
@@ -34,13 +35,17 @@ def receive_file(server_ip, server_port):
                     # Write data and send ACK
                     file.write(data)
                     expected_seq_num += len(data)
+                    expected_seq_num = handle_out_of_order_packet(buffer, expected_seq_num, file)
                     send_ack(client_socket, server_address, expected_seq_num)
                 elif seq_num < expected_seq_num:
                     # Resend ACK for duplicate packets
                     send_ack(client_socket, server_address, expected_seq_num)
                 else:
                     # Out-of-order packet handling
-                    handle_out_of_order_packet(seq_num, data)
+                    buffer[seq_num] = data
+                    print(f"Buffered out-of-order packet with sequence number {seq_num}")
+                    send_ack(client_socket,server_address,expected_seq_num)
+                    # handle_out_of_order_packet(seq_num, data)
 
             except socket.timeout:
                 print("Timeout: No data received, retrying...")
@@ -50,7 +55,7 @@ def initialize_socket():
     Initialize the UDP socket with necessary configurations.
     """
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    client_socket.settimeout(2)  # Set timeout for server response
+    client_socket.settimeout(1)  # Set timeout for server response
     return client_socket
 
 def establish_connection(client_socket, server_address):
@@ -61,7 +66,6 @@ def establish_connection(client_socket, server_address):
     while True:
         try:
             client_socket.sendto(b"START", server_address)
-            # Optionally wait for a server response
             return
         except socket.timeout:
             print("Retrying connection request...")
@@ -94,13 +98,16 @@ def check_end_signal(packet):
     # Define logic to check for an end signal in the packet
     return b"END" in packet
 
-def handle_out_of_order_packet(seq_num, data):
+def handle_out_of_order_packet(buffer,expected_seq_num, file):
     """
     Handle packets that arrive out of order.
     """
-    # Add logic to store and reorder out-of-order packets
-    print("to de done")
-    pass
+    while expected_seq_num in buffer:
+        data = buffer.pop(expected_seq_num)
+        file.write(data)
+        expected_seq_num += len(data)
+        print(f"Delivered buffered packet with sequence number {expected_seq_num}")
+    return expected_seq_num
 
 # Command-line argument parsing
 parser = argparse.ArgumentParser(description='Reliable file receiver over UDP.')
