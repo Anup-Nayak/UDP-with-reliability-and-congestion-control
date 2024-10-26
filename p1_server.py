@@ -1,7 +1,7 @@
 import socket
 import time
 import argparse
-
+import json,hashlib
 # Constants
 MSS = 1400
 WINDOW_SIZE = 5  # Example window size for sliding window
@@ -24,7 +24,6 @@ def send_file(server_ip, server_port, enable_fast_recovery):
         unacked_packets = {}
         duplicate_ack_count = 0
         file_complete = False
-        end_ack_rec = False
         while True:
             while (len(unacked_packets) < WINDOW_SIZE) and (not file_complete):
                 chunk = file.read(MSS)
@@ -61,14 +60,13 @@ def send_file(server_ip, server_port, enable_fast_recovery):
                     print(f"Received ACK for {ack_seq_num}")
                     last_ack_received = ack_seq_num
                     slide_window(unacked_packets, ack_seq_num)
-                    
+                else:
                     # endACK has been recieved
-                    if(fin_bit):
+                    if(fin_bit == 1):
                         print("Recieved Close Signal...")
                         return
-                    
-                else:
                     duplicate_ack_count = handle_duplicate_ack(ack_seq_num, duplicate_ack_count, enable_fast_recovery,unacked_packets,server_socket,client_address)
+                    
                 
             except socket.timeout:
                 print("Socket Timeout...")
@@ -110,7 +108,29 @@ def create_packet(seq_num,fin_bit, data):
     """
     Create a packet with sequence number and data.
     """
-    return f"{seq_num}|{fin_bit}|".encode() + data
+    packet = {
+    "sequence_number": seq_num,
+    "fin_bit": fin_bit,
+    "data": data
+    }
+
+    packet_json = json.dumps(packet)
+
+    checksum = hashlib.sha256(packet_json.encode()).hexdigest()
+    packet["checksum"] = checksum
+
+    return json.dumps(packet).encode()
+
+
+
+# def create_packet(seq_num,fin_bit, data):
+#     """
+#     Create a packet with sequence number and data.
+#     """
+#     packet = {
+#         "sequence_number": seq_num,
+#     }
+#     return f"{seq_num}|{fin_bit}|".encode() + data
 
 def receive_ack(server_socket):
     """
@@ -126,8 +146,7 @@ def get_seq_no_from_ack(ack_packet):
 
 def get_fin_bit(ack_packet):
     _,fin_bit,_ = ack_packet.decode().split('|',2)
-    result = (fin_bit==b'1')
-    return result
+    return int(fin_bit)
 
 def slide_window(unacked_packets, ack_seq_num):
     """
@@ -181,6 +200,6 @@ parser.add_argument('server_port', type=int, help='Port number of the server')
 parser.add_argument('fast_recovery', type=int, help='Enable fast recovery')
 
 args = parser.parse_args()
-
+print(args.fast_recovery)
 # Run the server
 send_file(args.server_ip, args.server_port, args.fast_recovery)

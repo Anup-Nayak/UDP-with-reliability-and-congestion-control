@@ -1,6 +1,6 @@
 import socket
 import argparse
-import time
+import time,json,hashlib
 
 # Constants
 MSS = 1400  # Maximum Segment Size
@@ -25,36 +25,36 @@ def receive_file(server_ip, server_port):
         while True:
             try:
                 packet, _ = receive_packet(client_socket)
-                seq_num, fin_bit, data = parse_packet(packet)
+                seq_num, fin_bit, data, correct = parse_packet(packet)
+                if(correct):
+                    if seq_num == expected_seq_num:
 
-                if seq_num == expected_seq_num:
+                        if fin_bit and not len(buffer):
+                            # send endACK and set timer
+                            close_connection(expected_seq_num,server_address,client_socket)
+                            return 
 
-                    if fin_bit and not len(buffer):
-                        # send endACK and set timer
-                        close_connection(expected_seq_num,server_address,client_socket)
-                        return 
+                        # Write data and send ACK
+                        file.write(data)
+                        expected_seq_num += len(data)
+                        expected_seq_num, fin = handle_out_of_order_packet(buffer, expected_seq_num, file)
+                        send_ack(client_socket, fin, server_address, expected_seq_num)
+                        
+                        # need to close connection
+                        if fin:
+                            # send endACK and set timer
+                            close_connection(expected_seq_num,server_address,client_socket)
+                            return
 
-                    # Write data and send ACK
-                    file.write(data)
-                    expected_seq_num += len(data)
-                    expected_seq_num, fin = handle_out_of_order_packet(buffer, expected_seq_num, file)
-                    send_ack(client_socket, fin, server_address, expected_seq_num)
-                    
-                    # need to close connection
-                    if fin:
-                        # send endACK and set timer
-                        close_connection(expected_seq_num,server_address,client_socket)
-                        return
-
-                    
-                elif seq_num < expected_seq_num:
-                    # Resend ACK for duplicate packets
-                    send_ack(client_socket,fin_bit, server_address, expected_seq_num)
-                else:
-                    # Out-of-order packet handling
-                    buffer[seq_num] = (data,fin_bit)
-                    print(f"Buffered out-of-order packet with sequence number {seq_num}")
-                    send_ack(client_socket,fin_bit,server_address,expected_seq_num)
+                        
+                    elif seq_num < expected_seq_num:
+                        # Resend ACK for duplicate packets
+                        send_ack(client_socket,fin_bit, server_address, expected_seq_num)
+                    else:
+                        # Out-of-order packet handling
+                        buffer[seq_num] = (data,fin_bit)
+                        print(f"Buffered out-of-order packet with sequence number {seq_num}")
+                        send_ack(client_socket,fin_bit,server_address,expected_seq_num)
                    
             except socket.timeout:
                 print("Timeout: No data received, retrying...")
@@ -84,19 +84,41 @@ def receive_packet(client_socket):
     Receive a packet from the server.
     """
     return client_socket.recvfrom(MSS + 100)
-
 def parse_packet(packet):
     """
     Parse the packet to extract sequence number and data.
     """
-    seq_num,fin_bit, data = packet.split(b'|',2)
-    return int(seq_num),fin_bit, data
+    packet_json = packet.decode()
+    correct = True
+
+    packet_dict = json.loads(packet_json)
+
+    received_checksum = packet_dict.pop("checksum", None)
+
+    recalculated_checksum = hashlib.sha256(json.dumps(packet_dict).encode()).hexdigest()
+    if received_checksum != recalculated_checksum:
+        print("Checksum does not match, packet may be corrupted.")
+        correct = False
+
+    seq_num = int(packet_dict["sequence_number"])
+    fin_bit = packet_dict["fin_bit"]
+    data = packet_dict["data"]
+
+    return seq_num, fin_bit, data, correct
+# def parse_packet(packet):
+#     """
+#     Parse the packet to extract sequence number and data.
+#     """
+#     seq_num,fin_bit, data = packet.split(b'|',2)
+#     result = (fin_bit==b'1')
+#     return int(seq_num),result, data
 
 def send_ack(client_socket,fin_bit, server_address, seq_num):
     """
     Send a cumulative acknowledgment for the received packet.
     """
-    ack_packet = f"{seq_num}|{fin_bit}|ACK".encode()
+    bit = (1 if fin_bit else 0)
+    ack_packet = f"{seq_num}|{bit}|ACK".encode()
     client_socket.sendto(ack_packet, server_address)
     print(f"Sent cumulative ACK for sequence number {seq_num}")
 
