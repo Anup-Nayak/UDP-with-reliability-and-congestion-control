@@ -1,5 +1,6 @@
 import socket
 import argparse
+import time
 
 # Constants
 MSS = 1400  # Maximum Segment Size
@@ -24,14 +25,28 @@ def receive_file(server_ip, server_port):
         while True:
             try:
                 packet, _ = receive_packet(client_socket)
-                seq_num,fin_bit, data = parse_packet(packet)
+                seq_num, fin_bit, data = parse_packet(packet)
+
                 if seq_num == expected_seq_num:
+
+                    if fin_bit and not len(buffer):
+                        # send endACK and set timer
+                        close_connection(expected_seq_num,server_address,client_socket)
+                        return 
+
                     # Write data and send ACK
                     file.write(data)
                     expected_seq_num += len(data)
-                    expected_seq_num,fin = handle_out_of_order_packet(buffer, expected_seq_num, file)
-                    send_ack(client_socket,fin_bit, server_address, expected_seq_num)
-                    print(fin)
+                    expected_seq_num, fin = handle_out_of_order_packet(buffer, expected_seq_num, file)
+                    send_ack(client_socket, fin, server_address, expected_seq_num)
+                    
+                    # need to close connection
+                    if fin:
+                        # send endACK and set timer
+                        close_connection(expected_seq_num,server_address,client_socket)
+                        return
+
+                    
                 elif seq_num < expected_seq_num:
                     # Resend ACK for duplicate packets
                     send_ack(client_socket,fin_bit, server_address, expected_seq_num)
@@ -40,8 +55,7 @@ def receive_file(server_ip, server_port):
                     buffer[seq_num] = (data,fin_bit)
                     print(f"Buffered out-of-order packet with sequence number {seq_num}")
                     send_ack(client_socket,fin_bit,server_address,expected_seq_num)
-                    # handle_out_of_order_packet(seq_num, data)
-
+                   
             except socket.timeout:
                 print("Timeout: No data received, retrying...")
 
@@ -106,6 +120,15 @@ def handle_out_of_order_packet(buffer,expected_seq_num, file):
         if(fin_bit):
             fin = True
     return expected_seq_num,fin
+
+
+def close_connection(seq_num, server_address, client_socket):
+    start = time.time()
+    while ((time.time() - start) < 2) :
+        ack_packet = f"{seq_num}|{1}|ACK".encode()
+        client_socket.sendto(ack_packet, server_address)
+        print("Sending Close Signal...")
+    return
 
 # Command-line argument parsing
 parser = argparse.ArgumentParser(description='Reliable file receiver over UDP.')

@@ -32,13 +32,14 @@ def send_file(server_ip, server_port, enable_fast_recovery):
                 if not chunk:
                     file_complete = True
                     fin_bit = 1
-                    break
                 
-                packet = create_packet(seq_num,fin_bit, chunk)
-                # if(seq_num!=0):
+                packet = create_packet(seq_num,fin_bit,chunk)
+                
                 server_socket.sendto(packet, client_address)
                 unacked_packets[seq_num] = (packet, time.time())
+
                 print(f"Sent packet {seq_num}")
+                
                 seq_num += len(chunk)
             
             if unacked_packets:
@@ -60,14 +61,17 @@ def send_file(server_ip, server_port, enable_fast_recovery):
                     print(f"Received ACK for {ack_seq_num}")
                     last_ack_received = ack_seq_num
                     slide_window(unacked_packets, ack_seq_num)
+                    
+                    # endACK has been recieved
                     if(fin_bit):
+                        print("Recieved Close Signal...")
                         return
                     
                 else:
                     duplicate_ack_count = handle_duplicate_ack(ack_seq_num, duplicate_ack_count, enable_fast_recovery,unacked_packets,server_socket,client_address)
                 
             except socket.timeout:
-                print("socket timeout")
+                print("Socket Timeout...")
             
 def check_for_end_signal(packet):
     """
@@ -75,8 +79,8 @@ def check_for_end_signal(packet):
     """
     if(b"END" in packet):
         return True
+    return False
 
-    return
 def initialize_socket(server_ip, server_port):
     """
     Initialize the UDP socket for the server.
@@ -100,9 +104,7 @@ def await_client_connection(server_socket):
                 print(f"Connection established with {client_address}")
                 return client_address
         except socket.timeout:
-            print("socket timeout")
-    
-    
+            print("Socket Timeout...")
 
 def create_packet(seq_num,fin_bit, data):
     """
@@ -121,10 +123,12 @@ def get_seq_no_from_ack(ack_packet):
     Extract the sequence number from an ACK packet.
     """
     return int(ack_packet.decode().split('|')[0])
+
 def get_fin_bit(ack_packet):
     _,fin_bit,_ = ack_packet.decode().split('|',2)
-    print(fin_bit)
-    return fin_bit
+    result = (fin_bit==b'1')
+    return result
+
 def slide_window(unacked_packets, ack_seq_num):
     """
     Slide the window to remove acknowledged packets.
@@ -168,9 +172,7 @@ def fast_recovery(packet,server_socket,client_address,ack_seq_num):
     
     server_socket.sendto(packet,client_address)
     print(f"Sent packet {ack_seq_num}")
-    # print("to de done")
-    pass
-    # Add logic to retransmit packet after 3 duplicate ACKs
+
 
 # Command-line argument parsing
 parser = argparse.ArgumentParser(description='Reliable file transfer server over UDP.')
