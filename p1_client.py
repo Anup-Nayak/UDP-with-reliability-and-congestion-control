@@ -24,27 +24,22 @@ def receive_file(server_ip, server_port):
         while True:
             try:
                 packet, _ = receive_packet(client_socket)
-
-                if check_end_signal(packet):
-                    print("File transfer complete")
-                    break
-
-                seq_num, data = parse_packet(packet)
-                
+                seq_num,fin_bit, data = parse_packet(packet)
                 if seq_num == expected_seq_num:
                     # Write data and send ACK
                     file.write(data)
                     expected_seq_num += len(data)
-                    expected_seq_num = handle_out_of_order_packet(buffer, expected_seq_num, file)
-                    send_ack(client_socket, server_address, expected_seq_num)
+                    expected_seq_num,fin = handle_out_of_order_packet(buffer, expected_seq_num, file)
+                    send_ack(client_socket,fin_bit, server_address, expected_seq_num)
+                    print(fin)
                 elif seq_num < expected_seq_num:
                     # Resend ACK for duplicate packets
-                    send_ack(client_socket, server_address, expected_seq_num)
+                    send_ack(client_socket,fin_bit, server_address, expected_seq_num)
                 else:
                     # Out-of-order packet handling
-                    buffer[seq_num] = data
+                    buffer[seq_num] = (data,fin_bit)
                     print(f"Buffered out-of-order packet with sequence number {seq_num}")
-                    send_ack(client_socket,server_address,expected_seq_num)
+                    send_ack(client_socket,fin_bit,server_address,expected_seq_num)
                     # handle_out_of_order_packet(seq_num, data)
 
             except socket.timeout:
@@ -80,14 +75,14 @@ def parse_packet(packet):
     """
     Parse the packet to extract sequence number and data.
     """
-    seq_num, data = packet.split(b'|', 1)
-    return int(seq_num), data
+    seq_num,fin_bit, data = packet.split(b'|',2)
+    return int(seq_num),fin_bit, data
 
-def send_ack(client_socket, server_address, seq_num):
+def send_ack(client_socket,fin_bit, server_address, seq_num):
     """
     Send a cumulative acknowledgment for the received packet.
     """
-    ack_packet = f"{seq_num}|ACK".encode()
+    ack_packet = f"{seq_num}|{fin_bit}|ACK".encode()
     client_socket.sendto(ack_packet, server_address)
     print(f"Sent cumulative ACK for sequence number {seq_num}")
 
@@ -97,17 +92,20 @@ def check_end_signal(packet):
     """
     # Define logic to check for an end signal in the packet
     return b"END" in packet
-
 def handle_out_of_order_packet(buffer,expected_seq_num, file):
     """
     Handle packets that arrive out of order.
     """
+    fin = False
     while expected_seq_num in buffer:
-        data = buffer.pop(expected_seq_num)
+        data,fin_bit = buffer.pop(expected_seq_num)
         file.write(data)
         expected_seq_num += len(data)
         print(f"Delivered buffered packet with sequence number {expected_seq_num}")
-    return expected_seq_num
+        print(fin_bit)
+        if(fin_bit):
+            fin = True
+    return expected_seq_num,fin
 
 # Command-line argument parsing
 parser = argparse.ArgumentParser(description='Reliable file receiver over UDP.')
