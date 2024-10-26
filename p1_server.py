@@ -111,7 +111,7 @@ def create_packet(seq_num,fin_bit, data):
     packet = {
     "sequence_number": seq_num,
     "fin_bit": fin_bit,
-    "data": data
+    "data": data.decode()
     }
 
     packet_json = json.dumps(packet)
@@ -121,16 +121,6 @@ def create_packet(seq_num,fin_bit, data):
 
     return json.dumps(packet).encode()
 
-
-
-# def create_packet(seq_num,fin_bit, data):
-#     """
-#     Create a packet with sequence number and data.
-#     """
-#     packet = {
-#         "sequence_number": seq_num,
-#     }
-#     return f"{seq_num}|{fin_bit}|".encode() + data
 
 def receive_ack(server_socket):
     """

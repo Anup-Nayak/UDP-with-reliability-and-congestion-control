@@ -83,7 +83,8 @@ def receive_packet(client_socket):
     """
     Receive a packet from the server.
     """
-    return client_socket.recvfrom(MSS + 100)
+    return client_socket.recvfrom(MSS + 10000)
+
 def parse_packet(packet):
     """
     Parse the packet to extract sequence number and data.
@@ -102,16 +103,10 @@ def parse_packet(packet):
 
     seq_num = int(packet_dict["sequence_number"])
     fin_bit = packet_dict["fin_bit"]
-    data = packet_dict["data"]
+    data = packet_dict["data"].encode()
 
     return seq_num, fin_bit, data, correct
-# def parse_packet(packet):
-#     """
-#     Parse the packet to extract sequence number and data.
-#     """
-#     seq_num,fin_bit, data = packet.split(b'|',2)
-#     result = (fin_bit==b'1')
-#     return int(seq_num),result, data
+
 
 def send_ack(client_socket,fin_bit, server_address, seq_num):
     """
@@ -146,10 +141,10 @@ def handle_out_of_order_packet(buffer,expected_seq_num, file):
 
 def close_connection(seq_num, server_address, client_socket):
     start = time.time()
+    print("Sending Close Signal...")
     while ((time.time() - start) < 2) :
         ack_packet = f"{seq_num}|{1}|ACK".encode()
         client_socket.sendto(ack_packet, server_address)
-        print("Sending Close Signal...")
     return
 
 # Command-line argument parsing
