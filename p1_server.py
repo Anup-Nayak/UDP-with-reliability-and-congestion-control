@@ -10,6 +10,7 @@ TIMEOUT = 0.20  # Initial timeout
 DUP_ACK_THRESHOLD = 3  # Threshold for fast retransmit
 FILE_PATH = "file_to_send.txt"
 RTT_FILE = "rtt.txt"
+
 def send_file(server_ip, server_port, enable_fast_recovery):
     """
     Send a predefined file to the client, ensuring reliability over UDP.
@@ -41,8 +42,8 @@ def send_file(server_ip, server_port, enable_fast_recovery):
                 packet = create_packet(seq_num,fin_bit,chunk)
                 
                 server_socket.sendto(packet, client_address)
-                unacked_packets[seq_num] = (packet, time.time())
 
+                unacked_packets[seq_num] = (packet, time.time())
                 # print(f"Sent packet {seq_num}")
                 
                 seq_num += len(chunk)
@@ -56,8 +57,6 @@ def send_file(server_ip, server_port, enable_fast_recovery):
                         packet_to_retransmit, _ = unacked_packets[first_unacked_seq_num]
                         server_socket.sendto(packet_to_retransmit, client_address)
                         # print(f"Retransmitted packet {first_unacked_seq_num}")
-                        # Update timestamp
-                        # del unacked_packets[first_unacked_seq_num]
                         unacked_packets[first_unacked_seq_num] = (packet_to_retransmit, time.time())
             try:
                 ack_packet, _ = receive_ack(server_socket) 
@@ -109,22 +108,14 @@ def await_client_connection(server_socket):
     """
     Wait for the client to initiate a connection.
     """
-    # print("Waiting for client connection...")
-    connect_establ = False
-    while( not connect_establ):
+    print("Waiting for client connection...")
+    while True:
         try:
             data, client_address = server_socket.recvfrom(1024)
-            if(data == (b'START')):
-                start = time.time()
-                while(time.time()-start < 0.25):
-                    server_socket.sendto(b"START_ACK",client_address)
-
-                connect_establ = True
-                # print(f"Connection established with {client_address}")
-                return client_address
+            print(f"Connection established with {client_address}")
+            return client_address
         except socket.timeout:
             pass
-            # print("Socket Timeout...")
 
 def create_packet(seq_num,fin_bit, data):
     """
@@ -148,7 +139,10 @@ def receive_ack(server_socket):
     """
     Receive an acknowledgment packet from the client.
     """
-    return server_socket.recvfrom(1024)
+    ack, a = server_socket.recvfrom(1024)
+    while(ack == b"START"):
+        ack, a = server_socket.recvfrom(1024)
+    return ack, a
 
 def get_seq_no_from_ack(ack_packet):
     """

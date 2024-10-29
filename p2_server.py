@@ -72,7 +72,7 @@ def send_file(server_ip, server_port):
                         duplicate_ack_count = 0
                         cwnd += MSS
                         last_ack_received = ack_seq_num
-                        sent_packets = slide_window(unacked_packets, ack_seq_num,sent_packets)
+                        sent_packets = slide_window(unacked_packets, ack_seq_num, sent_packets)
                     else:
                         # duplicate ack in slow start
                         duplicate_ack_count+=1

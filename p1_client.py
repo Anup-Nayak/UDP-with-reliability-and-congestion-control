@@ -20,15 +20,20 @@ def receive_file(server_ip, server_port):
     # Open the file to write received data
     buffer = {}
     with open(output_file_path, 'wb') as file:
-        establish_connection(client_socket, server_address)
-        
+        connection_established = False
+
         while True:
             try:
-                packet, _ = receive_packet(client_socket)
+                if(not connection_established):
+                    packet, _ = establish_connection(client_socket, server_address)
+                    connection_established = True
+                else:
+                    packet, _ = receive_packet(client_socket)
+
                 seq_num, fin_bit, data, correct = parse_packet(packet)
-                #print(fin_bit,seq_num)
+
                 if(correct):
-                    #print("correct")
+                    
                     if seq_num == expected_seq_num:
 
                         if fin_bit and not len(buffer):
@@ -57,7 +62,7 @@ def receive_file(server_ip, server_port):
                         buffer[seq_num] = (data,fin_bit)
                         #print(f"Buffered out-of-order packet with sequence number {seq_num}")
                         send_ack(client_socket,0,server_address,expected_seq_num)
-                   
+                
             except socket.timeout:
                 pass
                 #print("Timeout: No data received, retrying...")
@@ -74,26 +79,26 @@ def establish_connection(client_socket, server_address):
     """
     Establish the initial connection with the server by sending a request.
     """
-    #print("Sending connection request to server...")
+    print("Sending connection request to server...")
+    
+    client_socket.sendto(b"START", server_address)
     while True:
         try:
-            client_socket.sendto(b"START", server_address)
-            data,_ = client_socket.recvfrom(1024)
-
-            if(data==b"START_ACK"):
-                #print("Connection established")
-                return
+            data,a = client_socket.recvfrom(MSS+1000)
+            print("Connection established")
+            return data,a
+            
         except socket.timeout:
+            client_socket.sendto(b"START", server_address)
+            print("Retrying connection request...")
             pass
-            #print("Retrying connection request...")
 
 def receive_packet(client_socket):
     """
     Receive a packet from the server.
     """
     packet,a = client_socket.recvfrom(MSS+1000)
-    while(packet== b"START_ACK"):
-        packet,a = client_socket.recvfrom(MSS+1000)
+    
     return packet,a
 
 def parse_packet(packet):

@@ -153,7 +153,6 @@ def run():
                     result_c2 = c2.cmd(f'ps')
                     if not result_c2 or str(c2_pid) not in result_c2:  # Process is no longer running
                         end_time_c2 = time.time()
-           
 
             # Stop the network
             net.stop()
