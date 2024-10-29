@@ -26,7 +26,9 @@ def receive_file(server_ip, server_port):
             try:
                 packet, _ = receive_packet(client_socket)
                 seq_num, fin_bit, data, correct = parse_packet(packet)
+                #print(fin_bit,seq_num)
                 if(correct):
+                    #print("correct")
                     if seq_num == expected_seq_num:
 
                         if fin_bit and not len(buffer):
@@ -38,13 +40,13 @@ def receive_file(server_ip, server_port):
                         file.write(data)
                         expected_seq_num += len(data)
                         expected_seq_num, fin = handle_out_of_order_packet(buffer, expected_seq_num, file)
-                        send_ack(client_socket, fin, server_address, expected_seq_num)
                         
                         # need to close connection
                         if fin:
                             # send endACK and set timer
                             close_connection(expected_seq_num,server_address,client_socket)
                             return
+                        send_ack(client_socket, fin, server_address, expected_seq_num)
 
                         
                     elif seq_num < expected_seq_num:
@@ -53,37 +55,46 @@ def receive_file(server_ip, server_port):
                     else:
                         # Out-of-order packet handling
                         buffer[seq_num] = (data,fin_bit)
-                        print(f"Buffered out-of-order packet with sequence number {seq_num}")
-                        send_ack(client_socket,fin_bit,server_address,expected_seq_num)
+                        #print(f"Buffered out-of-order packet with sequence number {seq_num}")
+                        send_ack(client_socket,0,server_address,expected_seq_num)
                    
             except socket.timeout:
-                print("Timeout: No data received, retrying...")
+                pass
+                #print("Timeout: No data received, retrying...")
 
 def initialize_socket():
     """
     Initialize the UDP socket with necessary configurations.
     """
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    client_socket.settimeout(1)  # Set timeout for server response
+    client_socket.settimeout(0.2)  # Set timeout for server response
     return client_socket
 
 def establish_connection(client_socket, server_address):
     """
     Establish the initial connection with the server by sending a request.
     """
-    print("Sending connection request to server...")
+    #print("Sending connection request to server...")
     while True:
         try:
             client_socket.sendto(b"START", server_address)
-            return
+            data,_ = client_socket.recvfrom(1024)
+
+            if(data==b"START_ACK"):
+                #print("Connection established")
+                return
         except socket.timeout:
-            print("Retrying connection request...")
+            pass
+            #print("Retrying connection request...")
 
 def receive_packet(client_socket):
     """
     Receive a packet from the server.
     """
-    return client_socket.recvfrom(MSS + 10000)
+    packet,a = client_socket.recvfrom(MSS+1000)
+    while(packet== b"START_ACK"):
+        packet,a = client_socket.recvfrom(MSS+1000)
+    return packet,a
 
 def parse_packet(packet):
     """
@@ -98,7 +109,7 @@ def parse_packet(packet):
 
     recalculated_checksum = hashlib.sha256(json.dumps(packet_dict).encode()).hexdigest()
     if received_checksum != recalculated_checksum:
-        print("Checksum does not match, packet may be corrupted.")
+        #print("Checksum does not match, packet may be corrupted.")
         correct = False
 
     seq_num = int(packet_dict["sequence_number"])
@@ -112,10 +123,9 @@ def send_ack(client_socket,fin_bit, server_address, seq_num):
     """
     Send a cumulative acknowledgment for the received packet.
     """
-    bit = (1 if fin_bit else 0)
-    ack_packet = f"{seq_num}|{bit}|ACK".encode()
+    ack_packet = f"{seq_num}|{fin_bit}|ACK".encode()
     client_socket.sendto(ack_packet, server_address)
-    print(f"Sent cumulative ACK for sequence number {seq_num}")
+    #print(f"Sent cumulative ACK {fin_bit}for sequence number {seq_num}")
 
 def check_end_signal(packet):
     """
@@ -127,23 +137,22 @@ def handle_out_of_order_packet(buffer,expected_seq_num, file):
     """
     Handle packets that arrive out of order.
     """
-    fin = False
+    fin = 0
     while expected_seq_num in buffer:
         data,fin_bit = buffer.pop(expected_seq_num)
         file.write(data)
+        #print(f"Delivered buffered packet with sequence number {expected_seq_num}")
         expected_seq_num += len(data)
-        print(f"Delivered buffered packet with sequence number {expected_seq_num}")
-        print(fin_bit)
         if(fin_bit):
-            fin = True
+            fin = 1
     return expected_seq_num,fin
 
 
 def close_connection(seq_num, server_address, client_socket):
     start = time.time()
-    print("Sending Close Signal...")
-    while ((time.time() - start) < 2) :
-        ack_packet = f"{seq_num}|{1}|ACK".encode()
+    #print("Sending Close Signal...")
+    ack_packet = f"{seq_num}|{1}|ACK".encode()
+    while ((time.time() - start) < 0.25) :
         client_socket.sendto(ack_packet, server_address)
     return
 
@@ -151,8 +160,10 @@ def close_connection(seq_num, server_address, client_socket):
 parser = argparse.ArgumentParser(description='Reliable file receiver over UDP.')
 parser.add_argument('server_ip', help='IP address of the server')
 parser.add_argument('server_port', type=int, help='Port number of the server')
-
 args = parser.parse_args()
 
 # Run the client
+start = time.time()
 receive_file(args.server_ip, args.server_port)
+end = time.time()
+print(end-start)

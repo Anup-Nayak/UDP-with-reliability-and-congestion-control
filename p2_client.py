@@ -1,83 +1,172 @@
 import socket
 import argparse
+import time,json,hashlib
 
 # Constants
 MSS = 1400  # Maximum Segment Size
 
-def receive_file(server_ip, server_port, pref_outfile):
+def receive_file(server_ip, server_port,prefix):
     """
     Receive the file from the server with reliability, handling packet loss
     and reordering.
     """
-    # Initialize UDP socket
-    
-    ## Add logic for handling packet loss while establishing connection
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    client_socket.settimeout(2)  # Set timeout for server response
+    client_socket = initialize_socket()
 
+    # Initialize parameters
     server_address = (server_ip, server_port)
     expected_seq_num = 0
-    output_file_path = f"{pref_outfile}received_file.txt"  # Default file name
+    output_file_path = f"{prefix}received_file.txt"
 
+    # Open the file to write received data
+    buffer = {}
     with open(output_file_path, 'wb') as file:
+        establish_connection(client_socket, server_address)
+        
         while True:
             try:
-                # Send initial connection request to server
-                client_socket.sendto(b"START", server_address)
+                packet, _ = receive_packet(client_socket)
+                seq_num, fin_bit, data, correct = parse_packet(packet)
+                # print(fin_bit,seq_num)
+                if(correct):
+                    # print("correct")
+                    if seq_num == expected_seq_num:
 
-                # Receive the packet
-                packet, _ = client_socket.recvfrom(MSS + 100)  # Allow room for headers
-                
-                # Logic to handle end of file
+                        if fin_bit and not len(buffer):
+                            # send endACK and set timer
+                            close_connection(expected_seq_num,server_address,client_socket)
+                            return 
 
-                if end_signal:
-                    print("Received END signal from server, file transfer complete")
-                    break
-                
-                seq_num, data = parse_packet(packet)
+                        # Write data and send ACK
+                        file.write(data)
+                        expected_seq_num += len(data)
+                        expected_seq_num, fin = handle_out_of_order_packet(buffer, expected_seq_num, file)
+                        
+                        # need to close connection
+                        if fin:
+                            # send endACK and set timer
+                            close_connection(expected_seq_num,server_address,client_socket)
+                            return
+                        send_ack(client_socket, fin, server_address, expected_seq_num)
 
-                # If the packet is in order, write it to the file
-                if seq_num == expected_seq_num:
-                    file.write(data)
-                    print(f"Received packet {seq_num}, writing to file")
-                    
-                    # Update expected seq number and send cumulative ACK for the received packet
-                    send_ack(client_socket, server_address, seq_num)
-                elif seq_num < expected_seq_num:
-                    # Duplicate or old packet, send ACK again
-                    send_ack(client_socket, server_address, seq_num)
-                else:
-                    i = 1
-                    # packet arrived out of order
-                    # handle_pkt()
+                        
+                    elif seq_num < expected_seq_num:
+                        # Resend ACK for duplicate packets
+                        send_ack(client_socket,fin_bit, server_address, expected_seq_num)
+                    else:
+                        # Out-of-order packet handling
+                        buffer[seq_num] = (data,fin_bit)
+                        # print(f"Buffered out-of-order packet with sequence number {seq_num}")
+                        send_ack(client_socket,0,server_address,expected_seq_num)
+                   
             except socket.timeout:
-                print("Timeout waiting for data")
-                
+                pass
+                # print("Timeout: No data received, retrying...")
+
+def initialize_socket():
+    """
+    Initialize the UDP socket with necessary configurations.
+    """
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    client_socket.settimeout(0.1)  # Set timeout for server response
+    return client_socket
+
+def establish_connection(client_socket, server_address):
+    """
+    Establish the initial connection with the server by sending a request.
+    """
+    # print("Sending connection request to server...")
+    while True:
+        try:
+            client_socket.sendto(b"START", server_address)
+            data,_ = client_socket.recvfrom(1024)
+
+            if(data==b"START_ACK"):
+                pass
+                # print("Connection established")
+                return
+        except socket.timeout:
+            pass
+            # print("Retrying connection request...")
+
+def receive_packet(client_socket):
+    """
+    Receive a packet from the server.
+    """
+    packet,a = client_socket.recvfrom(MSS+1000)
+    while(packet== b"START_ACK"):
+        packet,a = client_socket.recvfrom(MSS+1000)
+    return packet,a
 
 def parse_packet(packet):
     """
-    Parse the packet to extract the sequence number and data.
+    Parse the packet to extract sequence number and data.
     """
-    seq_num, data = packet.split(b'|', 1)
-    return int(seq_num), data
+    packet_json = packet.decode()
+    correct = True
 
-def send_ack(client_socket, server_address, seq_num):
+    packet_dict = json.loads(packet_json)
+
+    received_checksum = packet_dict.pop("checksum", None)
+
+    recalculated_checksum = hashlib.sha256(json.dumps(packet_dict).encode()).hexdigest()
+    if received_checksum != recalculated_checksum:
+        #print("Checksum does not match, packet may be corrupted.")
+        correct = False
+
+    seq_num = int(packet_dict["sequence_number"])
+    fin_bit = packet_dict["fin_bit"]
+    data = packet_dict["data"].encode()
+
+    return seq_num, fin_bit, data, correct
+
+
+def send_ack(client_socket,fin_bit, server_address, seq_num):
     """
     Send a cumulative acknowledgment for the received packet.
     """
-    ack_packet = f"{seq_num}|ACK".encode()
+    ack_packet = f"{seq_num}|{fin_bit}|ACK".encode()
     client_socket.sendto(ack_packet, server_address)
-    print(f"Sent cumulative ACK for packet {seq_num}")
+    #print(f"Sent cumulative ACK {fin_bit}for sequence number {seq_num}")
 
-# Parse command-line arguments
+def check_end_signal(packet):
+    """
+    Check if the received packet is the end of the file transfer.
+    """
+    # Define logic to check for an end signal in the packet
+    return b"END" in packet
+def handle_out_of_order_packet(buffer,expected_seq_num, file):
+    """
+    Handle packets that arrive out of order.
+    """
+    fin = 0
+    while expected_seq_num in buffer:
+        data,fin_bit = buffer.pop(expected_seq_num)
+        file.write(data)
+        #print(f"Delivered buffered packet with sequence number {expected_seq_num}")
+        expected_seq_num += len(data)
+        if(fin_bit):
+            fin = 1
+    return expected_seq_num,fin
+
+
+def close_connection(seq_num, server_address, client_socket):
+    start = time.time()
+    #print("Sending Close Signal...")
+    ack_packet = f"{seq_num}|{1}|ACK".encode()
+    while ((time.time() - start) < 0.25) :
+        client_socket.sendto(ack_packet, server_address)
+    return
+
+# Command-line argument parsing
 parser = argparse.ArgumentParser(description='Reliable file receiver over UDP.')
 parser.add_argument('server_ip', help='IP address of the server')
 parser.add_argument('server_port', type=int, help='Port number of the server')
-parser.add_argument('--pref_outfile', default='', help='Prefix for the output file')
-
+parser.add_argument('--pref_outfile',type=str,help='prefix added to filename')
 args = parser.parse_args()
-print(args.pref_outfile)
-
+# #print(args.pref_outfile)
 # Run the client
-receive_file(args.server_ip, args.server_port, args.pref_outfile)
 
+start = time.time()
+receive_file(args.server_ip, args.server_port,args.pref_outfile)
+end= time.time()
+print(end-start)
