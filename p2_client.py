@@ -1,11 +1,11 @@
 import socket
 import argparse
 import time,json,hashlib
-
+print("client.py called")
 # Constants
 MSS = 1400  # Maximum Segment Size
 
-def receive_file(server_ip, server_port,prefix):
+def receive_file(server_ip, server_port,pref_outfile):
     """
     Receive the file from the server with reliability, handling packet loss
     and reordering.
@@ -15,20 +15,25 @@ def receive_file(server_ip, server_port,prefix):
     # Initialize parameters
     server_address = (server_ip, server_port)
     expected_seq_num = 0
-    output_file_path = f"{prefix}received_file.txt"
+    output_file_path = f"{pref_outfile}received_file.txt"
 
     # Open the file to write received data
     buffer = {}
     with open(output_file_path, 'wb') as file:
-        establish_connection(client_socket, server_address)
-        
+        connection_established = False
+
         while True:
             try:
-                packet, _ = receive_packet(client_socket)
+                if(not connection_established):
+                    packet, _ = establish_connection(client_socket, server_address)
+                    connection_established = True
+                else:
+                    packet, _ = receive_packet(client_socket)
+
                 seq_num, fin_bit, data, correct = parse_packet(packet)
-                # print(fin_bit,seq_num)
+
                 if(correct):
-                    # print("correct")
+                    
                     if seq_num == expected_seq_num:
 
                         if fin_bit and not len(buffer):
@@ -55,46 +60,45 @@ def receive_file(server_ip, server_port,prefix):
                     else:
                         # Out-of-order packet handling
                         buffer[seq_num] = (data,fin_bit)
-                        # print(f"Buffered out-of-order packet with sequence number {seq_num}")
+                        #print(f"Buffered out-of-order packet with sequence number {seq_num}")
                         send_ack(client_socket,0,server_address,expected_seq_num)
-                   
+                
             except socket.timeout:
                 pass
-                # print("Timeout: No data received, retrying...")
+                #print("Timeout: No data received, retrying...")
 
 def initialize_socket():
     """
     Initialize the UDP socket with necessary configurations.
     """
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    client_socket.settimeout(0.1)  # Set timeout for server response
+    client_socket.settimeout(0.2)  # Set timeout for server response
     return client_socket
 
 def establish_connection(client_socket, server_address):
     """
     Establish the initial connection with the server by sending a request.
     """
-    # print("Sending connection request to server...")
+    print("Sending connection request to server...")
+    
+    client_socket.sendto(b"START", server_address)
     while True:
         try:
-            client_socket.sendto(b"START", server_address)
-            data,_ = client_socket.recvfrom(1024)
-
-            if(data==b"START_ACK"):
-                pass
-                # print("Connection established")
-                return
+            data,a = client_socket.recvfrom(MSS+1000)
+            print("Connection established")
+            return data,a
+            
         except socket.timeout:
+            client_socket.sendto(b"START", server_address)
+            print("Retrying connection request...")
             pass
-            # print("Retrying connection request...")
 
 def receive_packet(client_socket):
     """
     Receive a packet from the server.
     """
     packet,a = client_socket.recvfrom(MSS+1000)
-    while(packet== b"START_ACK"):
-        packet,a = client_socket.recvfrom(MSS+1000)
+    
     return packet,a
 
 def parse_packet(packet):
@@ -161,12 +165,11 @@ def close_connection(seq_num, server_address, client_socket):
 parser = argparse.ArgumentParser(description='Reliable file receiver over UDP.')
 parser.add_argument('server_ip', help='IP address of the server')
 parser.add_argument('server_port', type=int, help='Port number of the server')
-parser.add_argument('--pref_outfile',type=str,help='prefix added to filename')
+parser.add_argument('--pref_outfile', type=str, help='Prefix of outfile')
 args = parser.parse_args()
-# #print(args.pref_outfile)
-# Run the client
 
+# Run the client
 start = time.time()
 receive_file(args.server_ip, args.server_port,args.pref_outfile)
-end= time.time()
+end = time.time()
 print(end-start)
