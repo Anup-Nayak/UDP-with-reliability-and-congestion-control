@@ -69,6 +69,7 @@ def run():
     output_file = f'p2_fairness.csv'
     f_out = open(output_file, 'w')
     f_out.write("delay,md5_hash_1,md5_hash_2,ttc1,ttc2,jfi\n")
+    f_out.flush()
 
 
     SERVER_IP1 = "10.0.0.3"
@@ -104,8 +105,8 @@ def run():
             s1 = net.get('s1')
             s2 = net.get('s2')
             
-            pref_c1 = "1"
-            pref_c2 = "2"
+            pref_c1 = "1_"
+            pref_c2 = "2_"
             s1_cmd = f"python3 p2_server.py {SERVER_IP1} {SERVER_PORT1} &"
             s2_cmd = f"python3 p2_server.py {SERVER_IP2} {SERVER_PORT2} &"
             c1_cmd = f"python3 p2_client.py {SERVER_IP1} {SERVER_PORT1} --pref_outfile {pref_c1} &"
@@ -124,7 +125,7 @@ def run():
                     continue
                 else:
                     c1_pid = c1_pid_raw.split()[-1]
-                    print("started client 1 with PID: {c1_pid}")
+                    print(f"started client 1 with PID: {c1_pid}")
                     break
             
             start_time_c2 = time.time()
@@ -170,6 +171,7 @@ def run():
 
 
             f_out.write(f"{DELAY},{hash1},{hash2},{dur_c1},{dur_c2},{jfi}\n")
+            f_out.flush()
             # Wait a moment before starting the next iteration
     
     time.sleep(1)

@@ -1,7 +1,7 @@
 import socket
 import argparse
 import time,json,hashlib
-print("client.py called")
+
 # Constants
 MSS = 1400  # Maximum Segment Size
 

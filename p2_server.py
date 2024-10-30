@@ -5,7 +5,6 @@ import json,hashlib
 import os,math
 # Constants
 MSS = 1400
-TIMEOUT = 1  # Initial timeout
 DUP_ACK_THRESHOLD = 3  # Threshold for fast retransmit
 FILE_PATH = "file.txt"
 def send_file(server_ip, server_port):
@@ -20,7 +19,7 @@ def send_file(server_ip, server_port):
     
     with open(FILE_PATH, 'rb') as file: 
         a ,b = 0.125 ,0.25
-        rto,cwnd,estimated_rtt,dev_rtt = 1,50,0,0
+        rto,estimated_rtt,dev_rtt = 0.25,None,None
         cwnd ,sshthresh = MSS,2200
         retransmitted_packets = {}
         sent_packets = 0
@@ -51,7 +50,7 @@ def send_file(server_ip, server_port):
                     first_unacked_seq_num = next(iter(unacked_packets))
                     _,_, timestamp = unacked_packets[first_unacked_seq_num]
 
-                    if time.time() - timestamp > TIMEOUT:
+                    if time.time() - timestamp > rto:
                     
                         sshthresh = max(MSS,cwnd/2)
                         cwnd = MSS
@@ -79,17 +78,17 @@ def send_file(server_ip, server_port):
                         if((last_packet_received in unacked_packets) and(last_packet_received not in retransmitted_packets) and(last_packet_received>=0)):
                             _,_,start_time = unacked_packets[last_packet_received]
                             sample_rtt = time.time()-start_time
-                            if(estimated_rtt==0):
+                            if(not estimated_rtt):
                                 estimated_rtt = sample_rtt
                                 dev_rtt = sample_rtt/2 
                             else:
                                 estimated_rtt = (1-a)*estimated_rtt+a*(sample_rtt)
                                 dev_rtt = (1-b)*dev_rtt+b*abs(sample_rtt-estimated_rtt)
-                            rto = estimated_rtt+4*dev_rtt
-                            if(rto<1): rto = 1
+                            # rto = estimated_rtt+4*dev_rtt
+                            # if(rto<1): rto = 1
                         
                         # Set the socket timeout to the new RTO value
-                        server_socket.settimeout(rto)
+                        # server_socket.settimeout(rto)
                         
                         # new ack in slow start phase
                         duplicate_ack_count = 0
@@ -124,17 +123,17 @@ def send_file(server_ip, server_port):
                         if((last_packet_received in unacked_packets) and(last_packet_received not in retransmitted_packets) and(last_packet_received>=0)):
                             _,_,start_time = unacked_packets[last_packet_received]
                             sample_rtt = time.time()-start_time
-                            if(estimated_rtt==0):
+                            if(not estimated_rtt):
                                 estimated_rtt = sample_rtt
                                 dev_rtt = sample_rtt/2 
                             else:
                                 estimated_rtt = (1-a)*estimated_rtt+a*(sample_rtt)
                                 dev_rtt = (1-b)*dev_rtt+b*abs(sample_rtt-estimated_rtt)
-                            rto = estimated_rtt+4*dev_rtt
-                            if(rto<1): rto = 1
+                            # rto = estimated_rtt+4*dev_rtt
+                            # if(rto<1): rto = 1
                         
                         # Set the socket timeout to the new RTO value
-                        server_socket.settimeout(rto)
+                        # server_socket.settimeout(rto)
                         duplicate_ack_count = 0
                         cwnd = sshthresh
                         last_ack_received = ack_seq_num
@@ -158,18 +157,18 @@ def send_file(server_ip, server_port):
                         if((last_packet_received in unacked_packets) and(last_packet_received not in retransmitted_packets) and(last_packet_received>=0)):
                             _,_,start_time = unacked_packets[last_packet_received]
                             sample_rtt = time.time()-start_time
-                            if(estimated_rtt==0):
+                            if(not estimated_rtt):
                                 estimated_rtt = sample_rtt
                                 dev_rtt = sample_rtt/2 
                             else:
                                 estimated_rtt = (1-a)*estimated_rtt+a*(sample_rtt)
                                 dev_rtt = (1-b)*dev_rtt+b*abs(sample_rtt-estimated_rtt)
-                            rto = estimated_rtt+4*dev_rtt
-                            if(rto<1): rto = 1
+                            # rto = estimated_rtt+4*dev_rtt
+                            # if(rto<1): rto = 1
                         
                         # Set the socket timeout to the new RTO value
                         
-                        server_socket.settimeout(rto)
+                        # server_socket.settimeout(rto)
                         cwnd = cwnd+MSS*(MSS/cwnd)
                         duplicate_ack_count = 0 
                         last_ack_received = ack_seq_num
@@ -213,7 +212,7 @@ def initialize_socket(server_ip, server_port):
     """
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     server_socket.bind((server_ip, server_port))
-    server_socket.settimeout(TIMEOUT)
+    server_socket.settimeout(0.25)
     return server_socket
 
 def await_client_connection(server_socket):
@@ -221,7 +220,6 @@ def await_client_connection(server_socket):
     Wait for the client to initiate a connection.
     """
     print("Waiting for client connection...")
-    # connect_establ = False
     while True:
         try:
             data, client_address = server_socket.recvfrom(1024)
