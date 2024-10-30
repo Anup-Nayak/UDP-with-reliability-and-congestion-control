@@ -107,13 +107,36 @@ def run():
             
             pref_c1 = "1_"
             pref_c2 = "2_"
-            s1_cmd = f"python3 p2_server.py {SERVER_IP1} {SERVER_PORT1} &"
-            s2_cmd = f"python3 p2_server.py {SERVER_IP2} {SERVER_PORT2} &"
-            c1_cmd = f"python3 p2_client.py {SERVER_IP1} {SERVER_PORT1} --pref_outfile {pref_c1} &"
-            c2_cmd = f"python3 p2_client.py {SERVER_IP2} {SERVER_PORT2} --pref_outfile {pref_c2} &"
+            s1_cmd = f"python3 p2_server.py {SERVER_IP1} {SERVER_PORT1} > server1_output.log 2>&1 &"
+            s2_cmd = f"python3 p2_server.py {SERVER_IP2} {SERVER_PORT2} > server2_output.log 2>&1 &"
+            c1_cmd = f"python3 p2_client.py {SERVER_IP1} {SERVER_PORT1} --pref_outfile {pref_c1} > client1_output.log 2>&1 &"
+            c2_cmd = f"python3 p2_client.py {SERVER_IP2} {SERVER_PORT2} --pref_outfile {pref_c2} > client2_output.log 2>&1 &"
 
-            s1_pid = s1.cmd(s1_cmd)
-            s2_pid = s2.cmd(s2_cmd)
+            s1_pid = ""
+            s2_pid = ""
+            
+            while True:
+                s1_pid_raw = s1.cmd(s1_cmd).strip()
+                if len(s1_pid_raw.split()) == 0:
+                    continue
+                else:
+                    s1_pid = s1_pid_raw.split()[-1]
+                    print(f"started server 1 with PID: {s1_pid}")
+                    break
+
+            while True:
+                s2_pid_raw = s2.cmd(s2_cmd).strip()
+                if len(s2_pid_raw.split()) == 0:
+                    continue
+                else:
+                    s2_pid = s2_pid_raw.split()[-1]
+                    print(f"started server 2 with PID: {s2_pid}")
+                    break
+
+            # s1_pid = s1.cmd(s1_cmd).strip().split()[-1]
+            # print(f"started server 1 with PID: {s1_pid}")
+            # s2_pid = s2.cmd(s2_cmd).strip().split()[-1]
+            # print(f"started server 2 with PID: {s2_pid}")
             time.sleep(1)
             
             start_time_c1 = time.time()
@@ -154,7 +177,6 @@ def run():
                     result_c2 = c2.cmd(f'ps')
                     if not result_c2 or str(c2_pid) not in result_c2:  # Process is no longer running
                         end_time_c2 = time.time()
-
             # Stop the network
             net.stop()
                 
