@@ -39,6 +39,7 @@ def receive_file(server_ip, server_port,pref_outfile):
                         if fin_bit and not len(buffer):
                             # send endACK and set timer
                             close_connection(expected_seq_num,server_address,client_socket)
+                            client_socket.close()
                             return 
 
                         # Write data and send ACK
@@ -50,6 +51,7 @@ def receive_file(server_ip, server_port,pref_outfile):
                         if fin:
                             # send endACK and set timer
                             close_connection(expected_seq_num,server_address,client_socket)
+                            client_socket.close()
                             return
                         send_ack(client_socket, fin, server_address, expected_seq_num)
 

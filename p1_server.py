@@ -3,13 +3,10 @@ import time
 import argparse
 import json,hashlib
 import math,os
-# Constants
+
 MSS = 1400
-# WINDOW_SIZE = 90  # Example window size for sliding window
-#  = 0.20  # Initial timeout
-DUP_ACK_THRESHOLD = 3  # Threshold for fast retransmit
+DUP_ACK_THRESHOLD = 3  
 FILE_PATH = "file_to_send.txt"
-RTT_FILE = "rtt.txt"
 
 def send_file(server_ip, server_port, enable_fast_recovery):
     """
@@ -18,12 +15,11 @@ def send_file(server_ip, server_port, enable_fast_recovery):
     server_socket = initialize_socket(server_ip, server_port)
 
     print(f"Server listening on {server_ip}:{server_port}")
-
     client_address = await_client_connection(server_socket)
     
     with open(FILE_PATH, 'rb') as file:
         a ,b = 0.125 ,0.25
-        rto,cwnd,estimated_rtt,dev_rtt = 1,50,0,0
+        rto,cwnd,estimated_rtt,dev_rtt = 0.25,50,None,None
         retransmitted_packets = {}
         seq_num, last_ack_received = 0, -1
         unacked_packets = {}
@@ -51,13 +47,13 @@ def send_file(server_ip, server_port, enable_fast_recovery):
                     _, timestamp = unacked_packets[first_unacked_seq_num]
 
                     if time.time() - timestamp > rto:
-                        rto = min(60,2*rto)
+                        # rto = min(60.0,2.0*rto)
 
                         # Retransmit the first unacked packet
                         retransmitted_packets[first_unacked_seq_num] = 1
                         packet_to_retransmit, _ = unacked_packets[first_unacked_seq_num]
                         server_socket.sendto(packet_to_retransmit, client_address)
-                        print(f"Retransmitted packet {first_unacked_seq_num}")
+                        # print(f"Retransmitted packet {first_unacked_seq_num}")
                         unacked_packets[first_unacked_seq_num] = (packet_to_retransmit, time.time())
             try:
                 ack_packet, _ = receive_ack(server_socket) 
@@ -68,26 +64,26 @@ def send_file(server_ip, server_port, enable_fast_recovery):
                     # if cumulative ack
                     last_packet_received = math.ceil((ack_seq_num-MSS)/MSS)*MSS
 
-                    if((last_packet_received in unacked_packets) and(last_packet_received not in retransmitted_packets) and(last_packet_received>=0)):
+                    if((last_packet_received in unacked_packets) and (last_packet_received not in retransmitted_packets) and (last_packet_received>=0)):
                         _,start_time = unacked_packets[last_packet_received]
                         sample_rtt = time.time()-start_time
-                        if(estimated_rtt==0):
+                        if(not estimated_rtt): 
                             estimated_rtt = sample_rtt
                             dev_rtt = sample_rtt/2 
                         else:
-                            estimated_rtt = (1-a)*estimated_rtt+a*(sample_rtt)
+                            
                             dev_rtt = (1-b)*dev_rtt+b*abs(sample_rtt-estimated_rtt)
-                        rto = estimated_rtt+4*dev_rtt
-                        if(rto<1): rto = 1
-                        # print(rto)
+                            estimated_rtt = (1-a)*estimated_rtt+a*(sample_rtt)
+                        # rto = estimated_rtt+4.0*dev_rtt
+                        # if(rto<1): rto = 1
 
                     # Set the socket timeout to the new RTO value
-                    server_socket.settimeout(rto)
+                    # server_socket.settimeout(rto)
                     duplicate_ack_count = 0
                     # print(f"Received ACK for {ack_seq_num}")
                     last_ack_received = ack_seq_num
                     slide_window(unacked_packets, ack_seq_num,retransmitted_packets)
-                    # print(len(unacked_packets))
+                
                 elif(ack_seq_num<last_ack_received):
                     # if old ack
                     pass
@@ -96,11 +92,7 @@ def send_file(server_ip, server_port, enable_fast_recovery):
                     # endACK has been recieved
                     if(fin_bit == 1):
                         # print(f"FIN ACK recieved for Packet {ack_seq_num}, Final Seq Number  {final_seq_number}")
-                        # print("Recieved Close Signal...")
-                        
-                        print(cwnd,estimated_rtt,rto)
-                        the_speed = (cwnd*MSS/(estimated_rtt*1000000))
-                        print(the_speed)
+                        print("Recieved Close Signal...")
                         return
                     duplicate_ack_count = handle_duplicate_ack(ack_seq_num, duplicate_ack_count, enable_fast_recovery,unacked_packets,server_socket,client_address)
                     
@@ -124,7 +116,7 @@ def initialize_socket(server_ip, server_port):
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_socket.bind((server_ip, server_port))
-    server_socket.settimeout(2)
+    server_socket.settimeout(0.25)
     return server_socket
 
 def await_client_connection(server_socket):
@@ -232,10 +224,7 @@ parser.add_argument('server_port', type=int, help='Port number of the server')
 parser.add_argument('fast_recovery', type=int, help='Enable fast recovery')
 
 args = parser.parse_args()
-# # print(args.fast_recovery)
 
-# print("server_file is called")
 start = time.time()
 send_file(args.server_ip, args.server_port, args.fast_recovery)
 end = time.time()
-print(end-start)

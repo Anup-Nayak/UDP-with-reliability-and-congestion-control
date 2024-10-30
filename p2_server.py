@@ -104,7 +104,7 @@ def send_file(server_ip, server_port):
                         if(fin_bit == 1):
                             # print(f"FIN ACK recieved for Packet {ack_seq_num}, Final Seq Number  {final_seq_number}")
                             print("Recieved Close Signal...")
-                            print(cwnd,sshthresh)
+                            server_socket.close()
                             return
                         if(duplicate_ack_count==3):
                             # retransmit missing segment and enter fast recovery phase
@@ -147,7 +147,7 @@ def send_file(server_ip, server_port):
                         if(fin_bit == 1):
                             # print(f"FIN ACK recieved for Packet {ack_seq_num}, Final Seq Number  {final_seq_number}")
                             print("Recieved Close Signal...")
-                            print(cwnd,sshthresh)
+                            server_socket.close()
                             return
                 else:
                     # congeston avoidance
@@ -182,7 +182,7 @@ def send_file(server_ip, server_port):
                             # endACK has been recieved
                             # print(f"FIN ACK recieved for Packet {ack_seq_num}, Final Seq Number  {final_seq_number}")
                             print("Recieved Close Signal...")
-                            print(cwnd,sshthresh)
+                            server_socket.close()
                             return
                         if(duplicate_ack_count==3):
                             # retransmit missing segment and enter fast recovery phase

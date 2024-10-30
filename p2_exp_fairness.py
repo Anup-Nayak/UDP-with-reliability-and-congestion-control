@@ -115,29 +115,29 @@ def run():
             s1_pid = ""
             s2_pid = ""
             
-            while True:
-                s1_pid_raw = s1.cmd(s1_cmd).strip()
-                if len(s1_pid_raw.split()) == 0:
-                    continue
-                else:
-                    s1_pid = s1_pid_raw.split()[-1]
-                    print(f"started server 1 with PID: {s1_pid}")
-                    break
+            # while True:
+            #     s1_pid_raw = s1.cmd(s1_cmd).strip()
+            #     if len(s1_pid_raw.split()) == 0:
+            #         continue
+            #     else:
+            #         s1_pid = s1_pid_raw.split()[-1]
+            #         print(f"started server 1 with PID: {s1_pid}")
+            #         break
 
-            while True:
-                s2_pid_raw = s2.cmd(s2_cmd).strip()
-                if len(s2_pid_raw.split()) == 0:
-                    continue
-                else:
-                    s2_pid = s2_pid_raw.split()[-1]
-                    print(f"started server 2 with PID: {s2_pid}")
-                    break
+            # while True:
+            #     s2_pid_raw = s2.cmd(s2_cmd).strip()
+            #     if len(s2_pid_raw.split()) == 0:
+            #         continue
+            #     else:
+            #         s2_pid = s2_pid_raw.split()[-1]
+            #         print(f"started server 2 with PID: {s2_pid}")
+            #         break
 
-            # s1_pid = s1.cmd(s1_cmd).strip().split()[-1]
-            # print(f"started server 1 with PID: {s1_pid}")
-            # s2_pid = s2.cmd(s2_cmd).strip().split()[-1]
-            # print(f"started server 2 with PID: {s2_pid}")
-            time.sleep(1)
+            s1_pid = s1.cmd(s1_cmd).strip().split()[-1]
+            print(f"started server 1 with PID: {s1_pid}")
+            s2_pid = s2.cmd(s2_cmd).strip().split()[-1]
+            print(f"started server 2 with PID: {s2_pid}")
+            time.sleep(5)
             
             start_time_c1 = time.time()
             c1_pid = ""

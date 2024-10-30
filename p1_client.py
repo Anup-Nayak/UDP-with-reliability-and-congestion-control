@@ -1,9 +1,9 @@
 import socket
 import argparse
 import time,json,hashlib
-print("client.py called")
-# Constants
-MSS = 1400  # Maximum Segment Size
+
+
+MSS = 1400
 
 def receive_file(server_ip, server_port):
     """
@@ -72,7 +72,7 @@ def initialize_socket():
     Initialize the UDP socket with necessary configurations.
     """
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    client_socket.settimeout(0.2)  # Set timeout for server response
+    client_socket.settimeout(0.25)  # Set timeout for server response
     return client_socket
 
 def establish_connection(client_socket, server_address):
@@ -90,7 +90,7 @@ def establish_connection(client_socket, server_address):
             
         except socket.timeout:
             client_socket.sendto(b"START", server_address)
-            print("Retrying connection request...")
+            # print("Retrying connection request...")
             pass
 
 def receive_packet(client_socket):
@@ -130,14 +130,14 @@ def send_ack(client_socket,fin_bit, server_address, seq_num):
     """
     ack_packet = f"{seq_num}|{fin_bit}|ACK".encode()
     client_socket.sendto(ack_packet, server_address)
-    #print(f"Sent cumulative ACK {fin_bit}for sequence number {seq_num}")
+    # print(f"Sent cumulative ACK {fin_bit}for sequence number {seq_num}")
 
 def check_end_signal(packet):
     """
     Check if the received packet is the end of the file transfer.
     """
-    # Define logic to check for an end signal in the packet
     return b"END" in packet
+
 def handle_out_of_order_packet(buffer,expected_seq_num, file):
     """
     Handle packets that arrive out of order.
@@ -146,7 +146,7 @@ def handle_out_of_order_packet(buffer,expected_seq_num, file):
     while expected_seq_num in buffer:
         data,fin_bit = buffer.pop(expected_seq_num)
         file.write(data)
-        #print(f"Delivered buffered packet with sequence number {expected_seq_num}")
+        # print(f"Delivered buffered packet with sequence number {expected_seq_num}")
         expected_seq_num += len(data)
         if(fin_bit):
             fin = 1
@@ -155,7 +155,7 @@ def handle_out_of_order_packet(buffer,expected_seq_num, file):
 
 def close_connection(seq_num, server_address, client_socket):
     start = time.time()
-    #print("Sending Close Signal...")
+    print("Sending Close Signal...")
     ack_packet = f"{seq_num}|{1}|ACK".encode()
     while ((time.time() - start) < 0.25) :
         client_socket.sendto(ack_packet, server_address)
@@ -171,4 +171,4 @@ args = parser.parse_args()
 start = time.time()
 receive_file(args.server_ip, args.server_port)
 end = time.time()
-print(end-start)
+print("Total Time to complete Transaction: ", end-start)
